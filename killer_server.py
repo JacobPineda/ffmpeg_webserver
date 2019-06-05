@@ -1,46 +1,50 @@
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import logging, json, io, urllib, subprocess, os, signal, time, datetime
-import _thread
 import requests
+import _thread
 from sys import argv
+import sys
 # The "fake camera feed" input (can be file or URL).
 INPUT_PATH = "/home/cache/test.mp4"
 # The ffserver configuration file to use.
 #CONFIG_PATH = "/home/ndsg/Desktop/thesis/source/fakecam/ffserver.conf"
 #LOG_FILE = open("fakecam_"+str(datetime.datetime.now())+".log", "w")
 
-port_number = argv[1]
-
+port_pid = dict()
 class S(BaseHTTPRequestHandler):
 
   def _set_response(self):
       self.send_response(200)
-      self.send_header('Content-Type', 'application/octet-stream')
-      #self.send_header('Content-Language', 'en')
+      self.send_header('Content-Type', 'application/json')
+      self.send_header('Content-Language', 'en')
       self.end_headers()
 
   def do_GET(self):
       # MAKE OK RESPONSE
-      
-      ffmpeg_instance = subprocess.Popen(["ffmpeg","-y", "-i",INPUT_PATH,"-f","mp4","-vcodec","libx264","-vf","scale=352:240","-strict","-2","/home/cache/PLEASEWORK"+str(port_number+".mp4")])
-      send_kill(port_number,ffmpeg_instance.pid)
-      ffmpeg_instance.wait()
-      #self._set_response()
-      #self.wfile.write(str(str_response).encode('utf-8'))
+      query_components = urllib.parse.parse_qs(self.path[2:])
+      #print(str(query_components))
+      port_num = query_components["port"][0]
+      #print(str(port_num))
+      #print(port_pid[port_num])
+      subprocess.Popen(["kill",str(port_pid[port_num])])
+      #os.killpg(int(port_pid[port_num]), signal.SIGTERM)
       self._set_response()
       #logging.info("GET request,\nPath: %s\nHeaders:\n%s\n", str(self.path), str(self.headers))
       # CONTAINS OUTPUT STREAM FOR RESPONSE
-      with open("/home/cache/PLEASEWORK"+str(port_number)+".mp4", 'rb') as file: 
-        self.wfile.write(file.read())
+      self.wfile.write("ok ok".encode())
+  
+  def do_POST(self):
+      content_length = int(self.headers["Content-Length"])
+      post_data = self.rfile.read(content_length)
+      new_shit = json.loads(post_data.decode("utf-8"))
+      for key, val in new_shit.items():
+          port_pid[key] = val
+      print(str(port_pid))
+      #self._set_response()
+      #self.wfile.write("ok ok")
+	
 
-
-def send_kill(port,pid):
-  data = {port:pid}
-  header =  {"Content-Type":"application/json"}
-  url = "localhost:7777"
-  requests.post(url,data=json.dumps(data),headers=header)
-
-def run(server_class=HTTPServer, handler_class=S, port=8001):
+def run(server_class=HTTPServer, handler_class=S, port=7777):
   logging.basicConfig(level=logging.INFO)
   server_address = ('', port)
   httpd = server_class(server_address, handler_class)
